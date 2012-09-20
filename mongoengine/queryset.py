@@ -172,30 +172,29 @@ class QueryCompilerVisitor(QNodeVisitor):
         """Merges Mongo query dicts - effectively &ing them together.
         """
         combined_query = {}
+        merge_query = defaultdict(list)
         for query in queries:
             for field, ops in query.items():
-                if field not in combined_query:
-                    combined_query[field] = ops
+                if isinstance(ops, dict) and isinstance(combined_query.get(field, {}), dict):
+                    if field not in combined_query.keys():
+                        combined_query[field] = {}
+                    combined_query[field].update(ops) 
                 else:
-                    # The field is already present in the query the only way
-                    # we can merge is if both the existing value and the new
-                    # value are operation dicts, reject anything else
-                    if (not isinstance(combined_query[field], dict) or
-                        not isinstance(ops, dict)):
-                        message = 'Conflicting values for ' + field
-                        raise InvalidQueryError(message)
+                    merge_query[field].append(ops)
 
-                    current_ops = set(combined_query[field].keys())
-                    new_ops = set(ops.keys())
-                    # Make sure that the same operation isn't applied more than
-                    # once to a single field
-                    intersection = current_ops.intersection(new_ops)
-                    if intersection:
-                        msg = 'Duplicate query conditions: '
-                        raise InvalidQueryError(msg + ', '.join(intersection))
+        for field, ops in merge_query.items():
+            if field in combined_query.keys():
+                ops.append(combined_query[field])
+                del combined_query[field]
+            if len(ops) > 1:
+                value = [{field:val} for val in ops]
+                if '$and' in combined_query.keys():
+                    combined_query['$and'].append(value)
+                else:
+                    combined_query['$and'] = value    
+            else:
+                combined_query[field] = ops[0]
 
-                    # Right! We've got two non-overlapping dicts of operations!
-                    combined_query[field].update(copy.deepcopy(ops))
         return combined_query
 
 
@@ -788,7 +787,7 @@ class QuerySet(object):
             if op is None or key not in mongo_query:
                 mongo_query[key] = value
             elif key in mongo_query:
-                if key in mongo_query and isinstance(mongo_query[key], dict):
+                if isinstance(mongo_query[key], dict) and isinstance(value, dict):
                     mongo_query[key].update(value)
                 else:
                     # Store for manually merging later
