@@ -178,7 +178,7 @@ class QueryCompilerVisitor(QNodeVisitor):
                 if isinstance(ops, dict) and isinstance(combined_query.get(field, {}), dict):
                     if field not in combined_query.keys():
                         combined_query[field] = {}
-                    combined_query[field].update(ops) 
+                    combined_query[field].update(ops)
                 else:
                     merge_query[field].append(ops)
 
@@ -191,7 +191,7 @@ class QueryCompilerVisitor(QNodeVisitor):
                 if '$and' in combined_query.keys():
                     combined_query['$and'].append(value)
                 else:
-                    combined_query['$and'] = value    
+                    combined_query['$and'] = value
             else:
                 combined_query[field] = ops[0]
 
@@ -601,6 +601,18 @@ class QuerySet(object):
     def _cursor(self):
         if self._cursor_obj is None:
 
+            # optimize the $or queries to transform into $in for list argument
+            if '$or' in self._query and isinstance(self._query['$or'], list):
+                attr = list(
+                    set([key for el in self._query['$or'] for key, val in el.items()])
+                )
+                if len(attr) == 1 and not attr[0].startswith('$'):
+                    attr = attr[0]
+                    self._query[attr] = {
+                        '$in': [v for el in self._query['$or'] for k, v in el.items()]
+                    }
+                    del self._query['$or']
+
             self._cursor_obj = self._collection.find(self._query,
                                                      **self._cursor_args)
             # Apply where clauses to cursor
@@ -621,6 +633,7 @@ class QuerySet(object):
 
             if self._hint != -1:
                 self._cursor_obj.hint(self._hint)
+
         return self._cursor_obj
 
     @classmethod
