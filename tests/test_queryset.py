@@ -245,14 +245,33 @@ class QuerySetTest(unittest.TestCase):
 
         B(a=a1).save()
 
-        # Works
-        q1 = B.objects.filter(a__in=[a1, a2], a=a1)._query
+        q1 = B.objects.filter(a__in=[a1, a2], a=a1)
 
-        # Doesn't work
         q2 = B.objects.filter(a__in=[a1, a2])
-        q2 = q2.filter(a=a1)._query
+        q2.filter(a=a1)
 
-        self.assertEqual(q1, q2)
+        self.assertEqual(list(q1), list(q2))
+    
+
+    def test_duplicate_query_field(self):
+        class A(Document):
+            pass
+
+        class B(Document):
+            a = ReferenceField(A)
+
+        A.drop_collection()
+        B.drop_collection()
+
+        a1 = A().save()
+        a2 = A().save()
+
+        B(a=a1).save()
+
+        q1 = B.objects.filter(a=a1)
+        q1.filter(a=a2)
+
+        self.assertEqual(q1.count(), 0)
 
     def test_update_write_options(self):
         """Test that passing write_options works"""
@@ -3514,11 +3533,9 @@ class QTest(unittest.TestCase):
             x = IntField()
             y = StringField()
 
-        # Check than an error is raised when conflicting queries are anded
-        def invalid_combination():
-            query = Q(x__lt=7) & Q(x__lt=3)
-            query.to_query(TestDoc)
-        self.assertRaises(InvalidQueryError, invalid_combination)
+        # Check than an error is not raised when conflicting queries are anded
+        query = Q(x__lt=7) & Q(x__lt=3)
+        query.to_query(TestDoc)
 
         # Check normal cases work without an error
         query = Q(x__lt=7) & Q(x__gt=3)
