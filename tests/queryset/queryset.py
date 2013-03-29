@@ -3072,6 +3072,30 @@ class QuerySetTest(unittest.TestCase):
     def test_upsert_includes_cls(self):
         """Upserts should include _cls information for inheritable classes
         """
+        class TestDoc(Document):
+            x = IntField()
+            y = StringField()
+
+        # Check than an error is not raised when conflicting queries are anded
+        query = Q(x__lt=7) & Q(x__lt=3)
+        query.to_query(TestDoc)
+
+        # Check normal cases work without an error
+        query = Q(x__lt=7) & Q(x__gt=3)
+
+        q1 = Q(x__lt=7)
+        q2 = Q(x__gt=3)
+        query = (q1 & q2).to_query(TestDoc)
+        self.assertEqual(query, {'x': {'$lt': 7, '$gt': 3}})
+
+        # More complex nested example
+        query = Q(x__lt=100) & Q(y__ne='NotMyString')
+        query &= Q(y__in=['a', 'b', 'c']) & Q(x__gt=-100)
+        mongo_query = {
+            'x': {'$lt': 100, '$gt': -100},
+            'y': {'$ne': 'NotMyString', '$in': ['a', 'b', 'c']},
+        }
+        self.assertEqual(query.to_query(TestDoc), mongo_query)
 
         class Test(Document):
             test = StringField()
