@@ -1,5 +1,5 @@
 from __future__ import with_statement
-import unittest
+import unittest2 as unittest
 from nose.plugins.skip import SkipTest
 from mongoengine.python_support import PY3
 from mongoengine import *
