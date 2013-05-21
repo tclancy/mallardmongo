@@ -23,38 +23,6 @@ class QNodeVisitor(object):
         return query
 
 
-class SimplificationVisitor(QNodeVisitor):
-    """Simplifies query trees by combinging unnecessary 'and' connection nodes
-    into a single Q-object.
-    """
-
-    def visit_combination(self, combination):
-        if combination.operation == combination.AND:
-            # The simplification only applies to 'simple' queries
-            if all(isinstance(node, Q) for node in combination.children):
-                queries = [n.query for n in combination.children]
-                return Q(**self._query_conjunction(queries))
-        return combination
-
-    def _query_conjunction(self, queries):
-        """Merges query dicts - effectively &ing them together.
-        """
-        query_ops = set()
-        combined_query = {}
-        for query in queries:
-            ops = set(query.keys())
-            # Make sure that the same operation isn't applied more than once
-            # to a single field
-            intersection = ops.intersection(query_ops)
-            if intersection:
-                msg = 'Duplicate query conditions: '
-                raise InvalidQueryError(msg + ', '.join(intersection))
-
-            query_ops.update(ops)
-            combined_query.update(copy.deepcopy(query))
-        return combined_query
-
-
 class QueryCompilerVisitor(QNodeVisitor):
     """Compiles the nodes in a query tree to a PyMongo-compatible query
     dictionary.
@@ -81,8 +49,7 @@ class QNode(object):
     OR = 1
 
     def to_query(self, document):
-        query = self.accept(SimplificationVisitor())
-        query = query.accept(QueryCompilerVisitor(document))
+        query = self.accept(QueryCompilerVisitor(document))
         return query
 
     def accept(self, visitor):
