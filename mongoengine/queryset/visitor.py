@@ -22,6 +22,8 @@ class QNodeVisitor(object):
         """
         return query
 
+class DuplicateQueryConditionsError(InvalidQueryError):
+    pass
 
 class SimplificationVisitor(QNodeVisitor):
     """Simplifies query trees by combinging unnecessary 'and' connection nodes
@@ -33,7 +35,10 @@ class SimplificationVisitor(QNodeVisitor):
             # The simplification only applies to 'simple' queries
             if all(isinstance(node, Q) for node in combination.children):
                 queries = [n.query for n in combination.children]
-                return Q(**self._query_conjunction(queries))
+                try:
+                    return Q(**self._query_conjunction(queries))
+                except DuplicateQueryConditionsError:
+                    pass
         return combination
 
     def _query_conjunction(self, queries):
@@ -48,7 +53,7 @@ class SimplificationVisitor(QNodeVisitor):
             intersection = ops.intersection(query_ops)
             if intersection:
                 msg = 'Duplicate query conditions: '
-                raise InvalidQueryError(msg + ', '.join(intersection))
+                raise DuplicateQueryConditionsError(msg + ', '.join(intersection))
 
             query_ops.update(ops)
             combined_query.update(copy.deepcopy(query))
