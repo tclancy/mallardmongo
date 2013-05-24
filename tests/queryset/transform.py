@@ -125,7 +125,7 @@ class TransformTest(unittest.TestCase):
 
         q1 = {'$or': [{'a': 1}, {'b': 1}]}
         query = Foo.objects(Q(__raw__=q1) & Q(c=1))._query
-        #self.assertEqual(query, {'$or': [{'a': 1}, {'b': 1}], 'c': 1})
+        self.assertEqual(query, {'$or': [{'a': 1}, {'b': 1}], 'c': 1})
 
     def test_raw_and_merging(self):
         class Doc(Document):

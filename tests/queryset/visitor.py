@@ -43,7 +43,7 @@ class QTest(unittest.TestCase):
         self.assertEqual((q1 | q2 | q3 | q4 | q5).to_query(Person), query)
 
         query = {'age': {'$gte': 18}, 'name': 'test'}
-        #self.assertEqual((q1 & q2 & q3 & q4 & q5).to_query(Person), query)
+        self.assertEqual((q1 & q2 & q3 & q4 & q5).to_query(Person), query)
 
     def test_q_with_dbref(self):
         """Ensure Q objects handle DBRefs correctly"""
@@ -72,7 +72,7 @@ class QTest(unittest.TestCase):
         def invalid_combination():
             query = Q(x__lt=7) & Q(x__lt=3)
             query.to_query(TestDoc)
-        #self.assertRaises(InvalidQueryError, invalid_combination)
+        self.assertRaises(InvalidQueryError, invalid_combination)
 
         # Check normal cases work without an error
         query = Q(x__lt=7) & Q(x__gt=3)
@@ -80,7 +80,7 @@ class QTest(unittest.TestCase):
         q1 = Q(x__lt=7)
         q2 = Q(x__gt=3)
         query = (q1 & q2).to_query(TestDoc)
-        #self.assertEqual(query, {'x': {'$lt': 7, '$gt': 3}})
+        self.assertEqual(query, {'x': {'$lt': 7, '$gt': 3}})
 
         # More complex nested example
         query = Q(x__lt=100) & Q(y__ne='NotMyString')
@@ -89,7 +89,7 @@ class QTest(unittest.TestCase):
             'x': {'$lt': 100, '$gt': -100},
             'y': {'$ne': 'NotMyString', '$in': ['a', 'b', 'c']},
         }
-        #self.assertEqual(query.to_query(TestDoc), mongo_query)
+        self.assertEqual(query.to_query(TestDoc), mongo_query)
 
     def test_or_combination(self):
         """Ensure that Q-objects correctly OR together.
