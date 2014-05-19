@@ -1,4 +1,5 @@
 import datetime
+import decimal
 import itertools
 import re
 import time
@@ -34,8 +35,8 @@ except ImportError:
     Image = None
     ImageOps = None
 
-__all__ = ['StringField',  'URLField',  'EmailField',  'IntField',
-           'FloatField',  'BooleanField',  'DateTimeField',
+__all__ = ['StringField',  'URLField',  'EmailField', 'IntField', 'LongField',
+           'FloatField',  'DecimalField',  'BooleanField',  'DateTimeField',
            'ComplexDateTimeField',  'EmbeddedDocumentField', 'ObjectIdField',
            'GenericEmbeddedDocumentField',  'DynamicField',  'ListField',
            'SortedListField',  'DictField',  'MapField',  'ReferenceField',
@@ -177,13 +178,54 @@ class IntField(BaseField):
             return int(value)
 
 
+class LongField(BaseField):
+    """An 64-bit integer field.
+    """
+
+    def __init__(self, min_value=None, max_value=None, **kwargs):
+        self.min_value, self.max_value = min_value, max_value
+        super(LongField, self).__init__(**kwargs)
+
+    def to_python(self, value):
+        try:
+            value = long(value)
+        except ValueError:
+            pass
+        return value
+
+    def validate(self, value):
+        try:
+            value = long(value)
+        except:
+            self.error('%s could not be converted to long' % value)
+
+        if self.min_value is not None and value < self.min_value:
+            self.error('Long value is too small')
+
+        if self.max_value is not None and value > self.max_value:
+            self.error('Long value is too large')
+
+    def prepare_query_value(self, op, value):
+        if value is None:
+            return value
+
+        return long(value)
+
+
 class FloatField(BaseField):
-    """A floating point number field.
+    """An floating point number field.
     """
 
     def __init__(self, min_value=None, max_value=None, **kwargs):
         self.min_value, self.max_value = min_value, max_value
         super(FloatField, self).__init__(**kwargs)
+
+    def to_python(self, value):
+        try:
+            value = float(value)
+        except ValueError:
+            pass
+        return value
 
     def validate(self, value):
         if isinstance(value, int):
@@ -196,6 +238,85 @@ class FloatField(BaseField):
 
         if self.max_value is not None and value > self.max_value:
             self.error('Float value is too large')
+
+    def prepare_query_value(self, op, value):
+        if value is None:
+            return value
+
+        return float(value)
+
+
+class DecimalField(BaseField):
+    """A fixed-point decimal number field.
+
+    .. versionchanged:: 0.8
+    .. versionadded:: 0.3
+    """
+
+    def __init__(self, min_value=None, max_value=None, force_string=False,
+                 precision=2, rounding=decimal.ROUND_HALF_UP, **kwargs):
+        """
+        :param min_value: Validation rule for the minimum acceptable value.
+        :param max_value: Validation rule for the maximum acceptable value.
+        :param force_string: Store as a string.
+        :param precision: Number of decimal places to store.
+        :param rounding: The rounding rule from the python decimal libary:
+
+            - decimal.ROUND_CEILING (towards Infinity)
+            - decimal.ROUND_DOWN (towards zero)
+            - decimal.ROUND_FLOOR (towards -Infinity)
+            - decimal.ROUND_HALF_DOWN (to nearest with ties going towards zero)
+            - decimal.ROUND_HALF_EVEN (to nearest with ties going to nearest even integer)
+            - decimal.ROUND_HALF_UP (to nearest with ties going away from zero)
+            - decimal.ROUND_UP (away from zero)
+            - decimal.ROUND_05UP (away from zero if last digit after rounding towards zero would have been 0 or 5; otherwise towards zero)
+
+            Defaults to: ``decimal.ROUND_HALF_UP``
+
+        """
+        self.min_value = min_value
+        self.max_value = max_value
+        self.force_string = force_string
+        self.precision = decimal.Decimal(".%s" % ("0" * precision))
+        self.rounding = rounding
+
+        super(DecimalField, self).__init__(**kwargs)
+
+    def to_python(self, value):
+        if value is None:
+            return value
+
+        # Convert to string for python 2.6 before casting to Decimal
+        try:
+            value = decimal.Decimal("%s" % value)
+        except decimal.InvalidOperation:
+            return value
+        return value.quantize(self.precision, rounding=self.rounding)
+
+    def to_mongo(self, value):
+        if value is None:
+            return value
+        if self.force_string:
+            return unicode(value)
+        return float(self.to_python(value))
+
+    def validate(self, value):
+        if not isinstance(value, decimal.Decimal):
+            if not isinstance(value, basestring):
+                value = unicode(value)
+            try:
+                value = decimal.Decimal(value)
+            except Exception, exc:
+                self.error('Could not convert value to decimal: %s' % exc)
+
+        if self.min_value is not None and value < self.min_value:
+            self.error('Decimal value is too small')
+
+        if self.max_value is not None and value > self.max_value:
+            self.error('Decimal value is too large')
+
+    def prepare_query_value(self, op, value):
+        return self.to_mongo(value)
 
 
 class BooleanField(BaseField):
